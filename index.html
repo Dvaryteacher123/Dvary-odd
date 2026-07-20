@@ -1,0 +1,2446 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Termux Command Manager</title>
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800;14..32,900&display=swap" rel="stylesheet" />
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js">
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js">
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js">
+    </script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #141b2b;
+            --bg-card: rgba(255, 255, 255, 0.03);
+            --bg-card-hover: rgba(255, 255, 255, 0.07);
+            --text-primary: #f0f4ff;
+            --text-secondary: #a8b8d8;
+            --text-muted: #4a5a7a;
+            --border-color: rgba(255, 255, 255, 0.05);
+            --border-hover: rgba(79, 110, 247, 0.2);
+            --accent: #4f6ef7;
+            --accent-glow: rgba(79, 110, 247, 0.15);
+            --gold: #fbbf24;
+            --gold-glow: rgba(251, 191, 36, 0.12);
+            --green: #22c55e;
+            --red: #ef4444;
+            --shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            --radius: 24px;
+            --radius-sm: 14px;
+            --transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .light-mode {
+            --bg-primary: #f0f4ff;
+            --bg-secondary: #ffffff;
+            --bg-card: rgba(255, 255, 255, 0.5);
+            --bg-card-hover: rgba(255, 255, 255, 0.7);
+            --text-primary: #1a1f36;
+            --text-secondary: #4a5a7a;
+            --text-muted: #8a9ab8;
+            --border-color: rgba(0, 0, 0, 0.06);
+            --border-hover: rgba(79, 110, 247, 0.15);
+            --shadow: 0 20px 60px rgba(0, 0, 0, 0.06);
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            transition: background 0.4s, color 0.4s, border-color 0.4s;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, var(--accent), var(--gold));
+            border-radius: 10px;
+        }
+
+        /* ===== TOAST ===== */
+        .toast-container {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 380px;
+            width: 100%;
+            pointer-events: none;
+        }
+
+        .toast {
+            background: var(--bg-secondary);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 14px 20px;
+            color: var(--text-primary);
+            box-shadow: var(--shadow);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transform: translateX(120%);
+            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            font-weight: 500;
+            font-size: 0.95rem;
+            pointer-events: all;
+        }
+
+        .toast.show {
+            transform: translateX(0);
+        }
+        .toast.success {
+            border-left: 4px solid var(--green);
+        }
+        .toast.error {
+            border-left: 4px solid var(--red);
+        }
+        .toast.warning {
+            border-left: 4px solid var(--gold);
+        }
+        .toast i {
+            font-size: 1.3rem;
+        }
+
+        /* ===== NAVBAR ===== */
+        .navbar {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background: var(--bg-secondary);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 10px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            transition: background 0.4s, border-color 0.4s;
+        }
+
+        .navbar .brand {
+            font-size: 1.5rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, var(--accent), var(--gold));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .navbar .brand i {
+            -webkit-text-fill-color: var(--accent);
+        }
+
+        .nav-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .nav-controls button {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 40px;
+            padding: 6px 14px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .nav-controls button:hover {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+            border-color: var(--border-hover);
+        }
+
+        .hamburger {
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            font-size: 1.6rem;
+            cursor: pointer;
+            padding: 4px 8px;
+            display: none;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+
+        .nav-links a {
+            padding: 8px 16px;
+            border-radius: 30px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: var(--transition);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+        .nav-links a:hover {
+            background: var(--bg-card);
+            color: var(--text-primary);
+        }
+
+        .nav-links a.active {
+            background: var(--accent-glow);
+            color: var(--accent);
+        }
+
+        .nav-auth {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .nav-auth a {
+            padding: 8px 18px;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: var(--transition);
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .nav-auth .btn-login {
+            color: var(--text-secondary);
+        }
+        .nav-auth .btn-login:hover {
+            color: var(--text-primary);
+        }
+        .nav-auth .btn-signup {
+            background: linear-gradient(135deg, var(--accent), #7c3aed);
+            color: #fff;
+        }
+        .nav-auth .btn-signup:hover {
+            transform: scale(1.04);
+            box-shadow: 0 8px 30px var(--accent-glow);
+        }
+
+        .nav-auth .btn-logout {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--red);
+            padding: 8px 18px;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            border: none;
+            cursor: pointer;
+            transition: var(--transition);
+            display: none;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .nav-auth .btn-logout:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+
+        .nav-links .nav-protected {
+            display: none;
+        }
+
+        body.logged-in .nav-links .nav-protected {
+            display: flex;
+        }
+
+        body.logged-in .nav-auth .btn-login,
+        body.logged-in .nav-auth .btn-signup {
+            display: none;
+        }
+        body.logged-in .nav-auth .btn-logout {
+            display: flex;
+        }
+
+        @media (max-width: 768px) {
+            .hamburger {
+                display: block;
+            }
+            .nav-links {
+                display: none;
+                width: 100%;
+                flex-direction: column;
+                align-items: stretch;
+                padding: 12px 0;
+                gap: 2px;
+                border-top: 1px solid var(--border-color);
+                margin-top: 10px;
+            }
+            .nav-links.open {
+                display: flex;
+            }
+            .nav-links a {
+                padding: 10px 16px;
+                border-radius: 12px;
+            }
+            .navbar .brand {
+                font-size: 1.2rem;
+            }
+        }
+
+        /* ===== PAGES ===== */
+        .page {
+            display: none;
+            padding: 24px 30px 80px;
+            max-width: 1300px;
+            margin: 0 auto;
+            animation: fadeUp 0.4s ease;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        @keyframes fadeUp {
+            0% {
+                opacity: 0;
+                transform: translateY(24px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 600px) {
+            .page {
+                padding: 12px 12px 80px;
+            }
+        }
+
+        /* ===== CARDS ===== */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 24px 28px;
+            transition: var(--transition);
+            backdrop-filter: blur(4px);
+            margin-bottom: 20px;
+        }
+
+        .card:hover {
+            border-color: var(--border-hover);
+        }
+
+        .card h3 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-primary);
+        }
+
+        .card h3 i {
+            color: var(--accent);
+        }
+
+        /* ===== SEARCH BAR ===== */
+        .search-container {
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .search-container input {
+            width: 100%;
+            padding: 14px 20px 14px 50px;
+            border-radius: var(--radius-sm);
+            border: 1.5px solid var(--border-color);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            font-size: 1rem;
+            outline: none;
+            transition: var(--transition);
+        }
+
+        .search-container input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px var(--accent-glow);
+        }
+
+        .search-container i {
+            position: absolute;
+            left: 18px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+        }
+
+        /* ===== COMMAND CARDS (kama screenshot) ===== */
+        .commands-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            gap: 20px;
+            margin-top: 16px;
+        }
+
+        .command-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 20px 22px;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .command-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent), var(--gold));
+            opacity: 0;
+            transition: 0.4s;
+        }
+
+        .command-card:hover::before {
+            opacity: 1;
+        }
+
+        .command-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--border-hover);
+            background: var(--bg-card-hover);
+        }
+
+        .command-card .command-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .command-card .command-main {
+            font-family: 'Courier New', monospace;
+            font-size: 0.95rem;
+            color: var(--gold);
+            background: var(--bg-primary);
+            padding: 10px 14px;
+            border-radius: var(--radius-sm);
+            border-left: 3px solid var(--gold);
+            margin: 8px 0;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            flex: 1;
+        }
+
+        .command-card .command-main .cmd-icon {
+            color: var(--green);
+            margin-right: 6px;
+        }
+
+        .command-card .copy-btn {
+            background: var(--gold-glow);
+            border: none;
+            color: var(--gold);
+            padding: 6px 14px;
+            border-radius: 30px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 600;
+            white-space: nowrap;
+            flex-shrink: 0;
+            margin-top: 4px;
+        }
+
+        .command-card .copy-btn:hover {
+            background: rgba(251, 191, 36, 0.25);
+        }
+
+        .command-card .desc {
+            color: var(--text-secondary);
+            margin-top: 8px;
+            font-size: 0.92rem;
+            line-height: 1.6;
+        }
+
+        .command-card .example {
+            background: var(--bg-primary);
+            border-radius: var(--radius-sm);
+            padding: 10px 14px;
+            margin-top: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        .command-card .example .ex-cmd {
+            color: var(--gold);
+        }
+
+        .command-card .meta {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            margin-top: 10px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 10px;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .command-card .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .command-card .tags .tag {
+            background: var(--accent-glow);
+            color: var(--accent);
+            padding: 2px 12px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .command-card .badge-category {
+            display: inline-block;
+            background: var(--accent-glow);
+            color: var(--accent);
+            padding: 2px 14px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        /* ===== STATS ===== */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 18px 20px;
+            text-align: center;
+            transition: var(--transition);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--border-hover);
+        }
+
+        .stat-card .number {
+            font-size: 2rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, var(--accent), var(--gold));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            line-height: 1.2;
+        }
+
+        .stat-card .label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        /* ===== FORMS ===== */
+        .form-group {
+            margin-bottom: 14px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            font-size: 0.85rem;
+            margin-bottom: 4px;
+            color: var(--text-secondary);
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: var(--radius-sm);
+            border: 1.5px solid var(--border-color);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            font-size: 1rem;
+            outline: none;
+            transition: var(--transition);
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px var(--accent-glow);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 60px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .btn-primary {
+            padding: 12px 32px;
+            border: none;
+            border-radius: 40px;
+            background: linear-gradient(135deg, var(--accent), #7c3aed);
+            color: #fff;
+            font-weight: 700;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: scale(1.02);
+            box-shadow: 0 8px 30px var(--accent-glow);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-danger {
+            padding: 6px 16px;
+            border: none;
+            border-radius: 30px;
+            background: rgba(239, 68, 68, 0.12);
+            color: var(--red);
+            font-weight: 600;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.25);
+        }
+
+        .btn-edit {
+            padding: 6px 16px;
+            border: none;
+            border-radius: 30px;
+            background: var(--accent-glow);
+            color: var(--accent);
+            font-weight: 600;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .btn-edit:hover {
+            background: rgba(79, 110, 247, 0.25);
+        }
+
+        /* ===== ADMIN LOCK ===== */
+        .admin-lock {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 32px 28px;
+            max-width: 440px;
+            margin: 20px auto;
+            text-align: center;
+        }
+
+        .admin-lock input {
+            width: 100%;
+            padding: 14px 18px;
+            border-radius: var(--radius-sm);
+            border: 1.5px solid var(--border-color);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            font-size: 1rem;
+            outline: none;
+            text-align: center;
+            letter-spacing: 2px;
+            transition: var(--transition);
+        }
+
+        .admin-lock input:focus {
+            border-color: var(--gold);
+            box-shadow: 0 0 0 4px var(--gold-glow);
+        }
+
+        .admin-lock .btn-unlock {
+            margin-top: 16px;
+            padding: 12px 40px;
+            border: none;
+            border-radius: 40px;
+            background: linear-gradient(135deg, var(--gold), #f59e0b);
+            color: #0a0e1a;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .admin-lock .btn-unlock:hover {
+            transform: scale(1.04);
+            box-shadow: 0 8px 30px var(--gold-glow);
+        }
+
+        .admin-lock .error {
+            color: var(--red);
+            margin-top: 10px;
+            min-height: 24px;
+            font-weight: 600;
+        }
+
+        .admin-content {
+            display: none;
+        }
+        .admin-content.show {
+            display: block;
+        }
+
+        /* ===== ADMIN ITEMS ===== */
+        .admin-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            transition: var(--transition);
+        }
+
+        .admin-item:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--border-hover);
+        }
+
+        .admin-item .info .command {
+            font-weight: 700;
+            color: var(--gold);
+            font-family: 'Courier New', monospace;
+        }
+
+        .admin-item .info .desc {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .admin-item .actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        /* ===== ABOUT PAGE ===== */
+        .about-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 16px;
+        }
+
+        .about-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 22px 24px;
+            transition: var(--transition);
+        }
+
+        .about-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--border-hover);
+        }
+
+        .about-card i {
+            font-size: 2.2rem;
+            color: var(--accent);
+            margin-bottom: 8px;
+        }
+
+        .about-card h4 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .about-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.7;
+        }
+
+        /* ===== BOTTOM NAV ===== */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg-secondary);
+            backdrop-filter: blur(16px);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-around;
+            padding: 8px 0 12px;
+            z-index: 999;
+            display: none;
+        }
+
+        .bottom-nav .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            color: var(--text-muted);
+            font-size: 0.65rem;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 4px 12px;
+            border-radius: 12px;
+            transition: var(--transition);
+            border: none;
+            background: none;
+        }
+
+        .bottom-nav .nav-item i {
+            font-size: 1.3rem;
+        }
+
+        .bottom-nav .nav-item.active {
+            color: var(--accent);
+        }
+
+        .bottom-nav .nav-item:hover {
+            color: var(--text-primary);
+        }
+
+        @media (max-width: 768px) {
+            .bottom-nav {
+                display: flex;
+            }
+            .about-grid {
+                grid-template-columns: 1fr;
+            }
+            .commands-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ===== AUTH ===== */
+        .auth-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 80vh;
+            padding: 20px;
+        }
+
+        .auth-card {
+            background: var(--bg-secondary);
+            backdrop-filter: blur(24px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 40px 36px;
+            width: 100%;
+            max-width: 440px;
+            box-shadow: var(--shadow);
+            transition: background 0.4s, border-color 0.4s, box-shadow 0.4s;
+            animation: slideIn 0.6s ease;
+        }
+
+        @keyframes slideIn {
+            0% {
+                opacity: 0;
+                transform: translateY(40px) scale(0.96);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .auth-card .logo {
+            text-align: center;
+            font-size: 2.8rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent), var(--gold));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 4px;
+        }
+
+        .auth-card .logo i {
+            -webkit-text-fill-color: var(--accent);
+        }
+
+        .auth-card h2 {
+            text-align: center;
+            font-size: 1.7rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-top: 2px;
+        }
+
+        .auth-card .sub {
+            text-align: center;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+            font-size: 0.95rem;
+        }
+
+        .auth-card .input-group {
+            position: relative;
+        }
+
+        .auth-card .input-group i {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+
+        .auth-card .input-group input {
+            width: 100%;
+            padding: 12px 16px 12px 44px;
+            border-radius: var(--radius-sm);
+            border: 1.5px solid var(--border-color);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            font-size: 1rem;
+            outline: none;
+            transition: var(--transition);
+            font-weight: 500;
+        }
+
+        .auth-card .input-group input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px var(--accent-glow);
+        }
+
+        .auth-card .btn-submit {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 40px;
+            background: linear-gradient(135deg, var(--accent), #7c3aed);
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .auth-card .btn-submit:hover:not(:disabled) {
+            transform: scale(1.02);
+            box-shadow: 0 8px 30px var(--accent-glow);
+        }
+
+        .auth-card .btn-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .auth-card .switch-link {
+            text-align: center;
+            margin-top: 18px;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .auth-card .switch-link a {
+            color: var(--accent);
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .auth-card .switch-link a:hover {
+            text-decoration: underline;
+        }
+
+        .auth-card .form-feedback {
+            margin-top: 6px;
+            font-size: 0.9rem;
+            text-align: center;
+            min-height: 24px;
+            transition: all 0.3s;
+        }
+
+        .auth-card .form-feedback.error {
+            color: var(--red);
+        }
+        .auth-card .form-feedback.success {
+            color: var(--green);
+        }
+
+        .auth-card .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0 14px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .auth-card .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+
+        .auth-card .forgot-link {
+            text-align: right;
+            margin-top: -4px;
+            margin-bottom: 14px;
+        }
+
+        .auth-card .forgot-link a {
+            color: var(--accent);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .auth-card .forgot-link a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 480px) {
+            .auth-card {
+                padding: 28px 18px;
+            }
+            .auth-card .logo {
+                font-size: 2.2rem;
+            }
+            .auth-card h2 {
+                font-size: 1.4rem;
+            }
+        }
+
+        .form-feedback {
+            margin-top: 8px;
+            font-size: 0.9rem;
+            min-height: 24px;
+        }
+
+        .form-feedback.success {
+            color: var(--green);
+        }
+        .form-feedback.error {
+            color: var(--red);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 50px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 12px;
+            opacity: 0.3;
+        }
+
+        /* ===== SPECIAL COMMAND DISPLAY ===== */
+        .command-description {
+            background: var(--bg-primary);
+            border-radius: var(--radius-sm);
+            padding: 12px 16px;
+            margin-top: 8px;
+            border-left: 3px solid var(--accent);
+        }
+
+        .command-description .label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+
+        .command-description .text {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-top: 4px;
+            line-height: 1.6;
+        }
+
+        .command-examples {
+            margin-top: 10px;
+        }
+
+        .command-examples .example-item {
+            background: var(--bg-primary);
+            border-radius: var(--radius-sm);
+            padding: 8px 12px;
+            margin-top: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            color: var(--gold);
+            border: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .command-examples .example-item .copy-mini {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: var(--transition);
+        }
+
+        .command-examples .example-item .copy-mini:hover {
+            color: var(--gold);
+        }
+
+        .command-examples .example-item .ex-desc {
+            color: var(--text-muted);
+            font-family: 'Inter', sans-serif;
+            font-size: 0.7rem;
+        }
+
+        /* End note styling */
+        .end-note {
+            margin-top: 12px;
+            padding: 12px 16px;
+            background: var(--accent-glow);
+            border-radius: var(--radius-sm);
+            border: 1px solid rgba(79, 110, 247, 0.1);
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            line-height: 1.6;
+        }
+
+        .end-note i {
+            color: var(--accent);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ===== TOAST ===== -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- ===== NAVBAR ===== -->
+    <nav class="navbar" id="navbar">
+        <div class="brand">
+            <i class="fas fa-terminal"></i> Termux Commands
+        </div>
+
+        <div class="nav-controls">
+            <button id="themeToggleNav" title="Badili mandhari">
+                <i class="fas fa-moon" id="themeIconNav"></i>
+            </button>
+            <button class="hamburger" id="hamburger">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+
+        <div class="nav-links" id="navLinks">
+            <a class="active" data-page="home"><i class="fas fa-home"></i> Nyumbani</a>
+            <a class="nav-protected" data-page="admin"><i class="fas fa-shield-alt"></i> Admin</a>
+            <a class="nav-protected" data-page="about"><i class="fas fa-info-circle"></i> Kuhusu</a>
+
+            <div class="nav-auth">
+                <a class="btn-login" data-page="login">Ingia</a>
+                <a class="btn-signup" data-page="signup">Jisajili</a>
+                <button class="btn-logout" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Toka</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ===== BOTTOM NAV ===== -->
+    <div class="bottom-nav" id="bottomNav">
+        <button class="nav-item active" data-page="home">
+            <i class="fas fa-home"></i>
+            <span>Nyumbani</span>
+        </button>
+        <button class="nav-item nav-protected" data-page="admin">
+            <i class="fas fa-shield-alt"></i>
+            <span>Admin</span>
+        </button>
+        <button class="nav-item nav-protected" data-page="about">
+            <i class="fas fa-info-circle"></i>
+            <span>Kuhusu</span>
+        </button>
+        <button class="nav-item" data-page="login" id="bottomLoginBtn">
+            <i class="fas fa-user"></i>
+            <span>Ingia</span>
+        </button>
+    </div>
+
+    <!-- ===== PAGE: HOME ===== -->
+    <section id="page-home" class="page active">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
+            <div>
+                <h1 style="font-size:2rem;font-weight:800;background:linear-gradient(135deg,var(--text-primary),var(--gold));-webkit-background-clip:text;-webkit-text-fill-color:transparent;">
+                    <i class="fas fa-terminal" style="-webkit-text-fill-color:var(--accent);"></i>
+                    Termux Commands
+                </h1>
+                <p style="color:var(--text-secondary);font-size:1.05rem;">
+                    Pata na ushiriki commands za Termux bure kabisa!
+                </p>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;background:rgba(34,197,94,0.08);padding:4px 16px;border-radius:40px;border:1px solid rgba(34,197,94,0.1);">
+                <span style="width:10px;height:10px;background:var(--green);border-radius:50%;display:inline-block;animation:pulse-dot 1.2s infinite;"></span>
+                <span style="color:var(--green);font-weight:600;" id="onlineCount">0</span>
+                <span style="color:var(--text-muted);font-size:0.9rem;">watumiaji online</span>
+            </div>
+        </div>
+
+        <style>
+            @keyframes pulse-dot {
+                0%,
+                100% {
+                    opacity: 1;
+                    transform: scale(1);
+                }
+                50% {
+                    opacity: 0.4;
+                    transform: scale(0.8);
+                }
+            }
+        </style>
+
+        <!-- Stats -->
+        <div class="stats-grid" id="homeStats">
+            <div class="stat-card">
+                <div class="number" id="homeStatCommands">0</div>
+                <div class="label"><i class="fas fa-code"></i> Commands</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="homeStatUsers">0</div>
+                <div class="label"><i class="fas fa-users"></i> Watumiaji</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="homeStatOnline">0</div>
+                <div class="label"><i class="fas fa-circle" style="color:var(--green);font-size:0.6rem;"></i> Online</div>
+            </div>
+        </div>
+
+        <!-- Search -->
+        <div class="search-container">
+            <i class="fas fa-search"></i>
+            <input type="text" id="searchInput" placeholder="Tafuta command, maelezo, au tag..." />
+        </div>
+
+        <div id="publicCommandsList" class="commands-grid">
+            <!-- Rendered by JS -->
+        </div>
+    </section>
+
+    <!-- ===== PAGE: ADMIN ===== -->
+    <section id="page-admin" class="page">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
+            <h2 style="font-size:1.8rem;font-weight:800;background:linear-gradient(135deg,var(--gold),#f59e0b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">
+                <i class="fas fa-shield-alt" style="-webkit-text-fill-color:var(--gold);"></i>
+                Admin Dashboard
+            </h2>
+            <span style="color:var(--text-muted);font-size:0.85rem;">
+                <i class="fas fa-key"></i> Nenosiri: <strong style="color:var(--gold);">5050</strong>
+            </span>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-grid" id="adminStats">
+            <div class="stat-card">
+                <div class="number" id="adminStatCommands">0</div>
+                <div class="label"><i class="fas fa-code"></i> Commands</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="adminStatUsers">0</div>
+                <div class="label"><i class="fas fa-users"></i> Watumiaji</div>
+            </div>
+        </div>
+
+        <!-- Admin Lock -->
+        <div id="adminLock" class="admin-lock">
+            <p style="color:var(--text-secondary);margin-bottom:12px;">
+                Weka nenosiri la admin kuendelea
+            </p>
+            <input type="password" id="adminPassInput" placeholder="****" />
+            <button class="btn-unlock" id="adminUnlockBtn"><i class="fas fa-unlock"></i> Fungua</button>
+            <div class="error" id="adminPassError"></div>
+        </div>
+
+        <!-- Admin Content -->
+        <div id="adminContent" class="admin-content">
+
+            <!-- Add Command Form -->
+            <div class="card">
+                <h3><i class="fas fa-plus-circle"></i> Ongeza / Hariri Command</h3>
+                <form id="commandForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Command *</label>
+                            <input type="text" id="cmdCommand" placeholder="python3 phunter.py -p +919876543210" required />
+                        </div>
+                        <div class="form-group">
+                            <label>Category</label>
+                            <select id="cmdCategory">
+                                <option value="OSINT">OSINT</option>
+                                <option value="Network">Network</option>
+                                <option value="System">System</option>
+                                <option value="Tools">Tools</option>
+                                <option value="Hacking">Hacking</option>
+                                <option value="Basic">Basic</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Maelezo ya Command</label>
+                            <textarea id="cmdDesc" placeholder="Maelezo kamili ya command hii..."></textarea>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Mifano (moja kwa mstari)</label>
+                            <textarea id="cmdExamples" placeholder="python3 phunter.py -p +919876543210&#10;python3 phunter.py -f file.txt"></textarea>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>End Note / Maelezo ya Ziada</label>
+                            <textarea id="cmdEndNote" placeholder="Maelezo ya ziada kuhusu command hii..."></textarea>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Tags (tenganisha na koma)</label>
+                            <input type="text" id="cmdTags" placeholder="phunter, osint, phone" />
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;">
+                        <button type="submit" class="btn-primary" id="cmdSubmitBtn">
+                            <i class="fas fa-save"></i> <span id="cmdBtnText">Hifadhi</span>
+                        </button>
+                    </div>
+                    <div id="cmdFormFeedback" class="form-feedback"></div>
+                </form>
+            </div>
+
+            <!-- Commands List (Admin) -->
+            <div class="card">
+                <h3><i class="fas fa-list"></i> Commands Zilizopo</h3>
+                <div id="adminCommandsList">
+                    <!-- Rendered by JS -->
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== PAGE: ABOUT ===== -->
+    <section id="page-about" class="page">
+        <div style="text-align:center;margin-bottom:20px;">
+            <h1 style="font-size:2.2rem;font-weight:800;background:linear-gradient(135deg,var(--text-primary),var(--gold));-webkit-background-clip:text;-webkit-text-fill-color:transparent;">
+                <i class="fas fa-info-circle" style="-webkit-text-fill-color:var(--accent);"></i>
+                Kuhusu Termux Commands
+            </h1>
+            <p style="color:var(--text-secondary);font-size:1.05rem;">
+                Jifunze zaidi kuhusu App hii ya Termux
+            </p>
+        </div>
+
+        <div class="about-grid">
+            <div class="about-card">
+                <i class="fas fa-terminal"></i>
+                <h4>Termux Command Manager</h4>
+                <p>Hapa unapata commands zote muhimu za Termux zilizokusanywa kwa mtindo mzuri wa kuonesha maelezo, mifano, na maelekezo kamili.</p>
+            </div>
+            <div class="about-card">
+                <i class="fas fa-users"></i>
+                <h4>Jamii Yetu</h4>
+                <p>Tuna jamii ya watumiaji wa Termux wanaoshiriki commands na kusaidiana. Kila siku tunaongeza commands mpya na maelezo yake.</p>
+            </div>
+            <div class="about-card">
+                <i class="fas fa-shield-alt"></i>
+                <h4>Usalama</h4>
+                <p>Tunatumia teknolojia ya kisasa kuhakikisha data yako iko salama na commands zote ni za kuaminika.</p>
+            </div>
+            <div class="about-card">
+                <i class="fas fa-gem"></i>
+                <h4>Vipengele</h4>
+                <ul style="list-style:none;padding:0;color:var(--text-secondary);">
+                    <li style="padding:4px 0;"><i class="fas fa-check-circle" style="color:var(--gold);"></i> Ongeza commands kwa urahisi</li>
+                    <li style="padding:4px 0;"><i class="fas fa-check-circle" style="color:var(--gold);"></i> Nakili commands kwa bofyo</li>
+                    <li style="padding:4px 0;"><i class="fas fa-check-circle" style="color:var(--gold);"></i> Tafuta kwa haraka</li>
+                    <li style="padding:4px 0;"><i class="fas fa-check-circle" style="color:var(--gold);"></i> Panga kwa category</li>
+                    <li style="padding:4px 0;"><i class="fas fa-check-circle" style="color:var(--gold);"></i> Onyesha mifano na maelezo kamili</li>
+                    <li style="padding:4px 0;"><i class="fas fa-check-circle" style="color:var(--gold);"></i> Badilisha mandhari</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== PAGE: LOGIN ===== -->
+    <section id="page-login" class="page">
+        <div class="auth-wrapper">
+            <div class="auth-card">
+                <div class="logo"><i class="fas fa-terminal"></i> Termux</div>
+                <h2>Karibu Tena</h2>
+                <p class="sub">Ingia kwenye akaunti yako</p>
+
+                <form id="loginForm">
+                    <div class="input-group">
+                        <i class="fas fa-envelope"></i>
+                        <input type="email" id="loginEmail" placeholder="mfano@email.com" required />
+                    </div>
+                    <div style="margin-top:12px;" class="input-group">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="loginPassword" placeholder="••••••••" required />
+                    </div>
+
+                    <div class="forgot-link">
+                        <a id="forgotPasswordLink">Umesahau nenosiri?</a>
+                    </div>
+
+                    <div class="form-feedback" id="loginFeedback"></div>
+
+                    <button type="submit" class="btn-submit" id="loginBtn">
+                        <i class="fas fa-arrow-right"></i> Ingia
+                    </button>
+                </form>
+
+                <div class="switch-link">
+                    Huna akaunti? <a id="switchToSignup">Jisajili</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== PAGE: SIGNUP ===== -->
+    <section id="page-signup" class="page">
+        <div class="auth-wrapper">
+            <div class="auth-card">
+                <div class="logo"><i class="fas fa-terminal"></i> Termux</div>
+                <h2>Jisajili</h2>
+                <p class="sub">Unda akaunti yako bure</p>
+
+                <form id="signupForm">
+                    <div class="input-group">
+                        <i class="fas fa-user"></i>
+                        <input type="text" id="signupFullName" placeholder="Jina lako" required />
+                    </div>
+                    <div style="margin-top:12px;" class="input-group">
+                        <i class="fas fa-at"></i>
+                        <input type="text" id="signupUsername" placeholder="@username" required />
+                    </div>
+                    <div style="margin-top:12px;" class="input-group">
+                        <i class="fas fa-envelope"></i>
+                        <input type="email" id="signupEmail" placeholder="mfano@email.com" required />
+                    </div>
+                    <div style="margin-top:12px;" class="input-group">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="signupPassword" placeholder="Angalau herufi 8" required />
+                    </div>
+                    <div style="margin-top:12px;" class="input-group">
+                        <i class="fas fa-check-circle"></i>
+                        <input type="password" id="signupConfirm" placeholder="Thibitisha nenosiri" required />
+                    </div>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="termsCheck" required />
+                        <label for="termsCheck">Nakubali <a href="#" style="color:var(--accent);">Masharti na Sera</a></label>
+                    </div>
+
+                    <div class="form-feedback" id="signupFeedback"></div>
+
+                    <button type="submit" class="btn-submit" id="signupBtn">
+                        <i class="fas fa-user-plus"></i> Unda Akaunti
+                    </button>
+                </form>
+
+                <div class="switch-link">
+                    Tuna akaunti? <a id="switchToLogin">Ingia</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- JAVASCRIPT -->
+    <!-- ============================================================ -->
+    <script>
+        (function() {
+            'use strict';
+
+            // ==============================================================
+            // FIREBASE CONFIG
+            // ==============================================================
+            const firebaseConfig = {
+                apiKey: "AIzaSyDpFyANpjv2dMUvXoMSSmqoT3s1UwJLUkg",
+                authDomain: "dvary-9a7d0.firebaseapp.com",
+                projectId: "dvary-9a7d0",
+                storageBucket: "dvary-9a7d0.firebasestorage.app",
+                messagingSenderId: "107370806066",
+                appId: "1:107370806066:android:e954fb03d99e52ac09f52b"
+            };
+
+            let useFirebase = false;
+            let auth = null;
+            let db = null;
+
+            try {
+                firebase.initializeApp(firebaseConfig);
+                auth = firebase.auth();
+                db = firebase.firestore();
+                useFirebase = true;
+                console.log('✅ Firebase imeunganishwa.');
+            } catch (err) {
+                console.warn('⚠️ Firebase hitilafu:', err.message);
+                useFirebase = false;
+            }
+
+            // ==============================================================
+            // ADMIN PASSWORD
+            // ==============================================================
+            const ADMIN_PASSWORD_HASH = btoa('5050');
+
+            function checkAdminPassword(input) {
+                return btoa(input) === ADMIN_PASSWORD_HASH;
+            }
+
+            // ==============================================================
+            // DOM REFS
+            // ==============================================================
+            const $ = (s) => document.querySelector(s);
+            const $$ = (s) => document.querySelectorAll(s);
+
+            const pages = {
+                home: $('#page-home'),
+                admin: $('#page-admin'),
+                about: $('#page-about'),
+                login: $('#page-login'),
+                signup: $('#page-signup')
+            };
+
+            const navLinks = $$('.nav-links a[data-page]');
+            const bottomNav = $$('.bottom-nav .nav-item');
+            const hamburger = $('#hamburger');
+            const navLinksContainer = $('#navLinks');
+
+            // Auth
+            const loginForm = $('#loginForm');
+            const loginEmail = $('#loginEmail');
+            const loginPassword = $('#loginPassword');
+            const loginFeedback = $('#loginFeedback');
+            const loginBtn = $('#loginBtn');
+            const switchToSignup = $('#switchToSignup');
+            const switchToLogin = $('#switchToLogin');
+            const forgotLink = $('#forgotPasswordLink');
+
+            const signupForm = $('#signupForm');
+            const signupFullName = $('#signupFullName');
+            const signupUsername = $('#signupUsername');
+            const signupEmail = $('#signupEmail');
+            const signupPassword = $('#signupPassword');
+            const signupConfirm = $('#signupConfirm');
+            const termsCheck = $('#termsCheck');
+            const signupFeedback = $('#signupFeedback');
+            const signupBtn = $('#signupBtn');
+
+            const logoutBtn = $('#logoutBtn');
+
+            // Theme
+            const themeToggleNav = $('#themeToggleNav');
+            const themeIconNav = $('#themeIconNav');
+
+            // Admin
+            const adminLock = $('#adminLock');
+            const adminContent = $('#adminContent');
+            const adminPassInput = $('#adminPassInput');
+            const adminUnlockBtn = $('#adminUnlockBtn');
+            const adminPassError = $('#adminPassError');
+
+            // Command Form
+            const commandForm = $('#commandForm');
+            const cmdCommand = $('#cmdCommand');
+            const cmdDesc = $('#cmdDesc');
+            const cmdCategory = $('#cmdCategory');
+            const cmdTags = $('#cmdTags');
+            const cmdExamples = $('#cmdExamples');
+            const cmdEndNote = $('#cmdEndNote');
+            const cmdSubmitBtn = $('#cmdSubmitBtn');
+            const cmdBtnText = $('#cmdBtnText');
+            const cmdFormFeedback = $('#cmdFormFeedback');
+
+            const publicList = $('#publicCommandsList');
+            const adminList = $('#adminCommandsList');
+            const searchInput = $('#searchInput');
+
+            const homeStatCommands = $('#homeStatCommands');
+            const homeStatUsers = $('#homeStatUsers');
+            const homeStatOnline = $('#homeStatOnline');
+            const adminStatCommands = $('#adminStatCommands');
+            const adminStatUsers = $('#adminStatUsers');
+            const onlineCount = $('#onlineCount');
+
+            const toastContainer = $('#toastContainer');
+
+            let currentUser = null;
+            let isAdminUnlocked = false;
+            let editingDocId = null;
+            let darkMode = true;
+
+            // ==============================================================
+            // STORAGE HELPERS
+            // ==============================================================
+            function storageGet(key, def) {
+                try {
+                    const val = localStorage.getItem('termux_' + key);
+                    return val ? JSON.parse(val) : def;
+                } catch { return def; }
+            }
+
+            function storageSet(key, val) {
+                localStorage.setItem('termux_' + key, JSON.stringify(val));
+            }
+
+            function getUsers() { return storageGet('users', []); }
+
+            function saveUsers(users) { storageSet('users', users); }
+
+            function getCommands() { return storageGet('commands', []); }
+
+            function saveCommands(data) { storageSet('commands', data); }
+
+            function getCurrentUser() { return storageGet('currentUser', null); }
+
+            function setCurrentUser(user) { storageSet('currentUser', user); }
+
+            function getBlockedUsers() { return storageGet('blockedUsers', []); }
+
+            function saveBlockedUsers(list) { storageSet('blockedUsers', list); }
+
+            // ==============================================================
+            // TOAST
+            // ==============================================================
+            function showToast(message, type = 'info') {
+                const icons = {
+                    success: 'fa-check-circle',
+                    error: 'fa-exclamation-circle',
+                    warning: 'fa-exclamation-triangle',
+                    info: 'fa-info-circle'
+                };
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                toast.innerHTML = `<i class="fas ${icons[type] || icons.info}"></i> ${message}`;
+                toastContainer.appendChild(toast);
+                setTimeout(() => toast.classList.add('show'), 50);
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                    setTimeout(() => toast.remove(), 400);
+                }, 4000);
+            }
+
+            // ==============================================================
+            // THEME
+            // ==============================================================
+            function setTheme(mode) {
+                darkMode = mode;
+                document.body.classList.toggle('light-mode', !mode);
+                themeIconNav.className = mode ? 'fas fa-moon' : 'fas fa-sun';
+                localStorage.setItem('theme', mode ? 'dark' : 'light');
+            }
+
+            themeToggleNav.addEventListener('click', () => setTheme(!darkMode));
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'light') setTheme(false);
+            else setTheme(true);
+
+            // ==============================================================
+            // NAVIGATION
+            // ==============================================================
+            function showPage(pageId) {
+                if ((pageId === 'admin' || pageId === 'about') && !currentUser) {
+                    showToast('Tafadhali ingia kwanza.', 'warning');
+                    pageId = 'login';
+                }
+
+                Object.values(pages).forEach(p => p.classList.remove('active'));
+                if (pages[pageId]) pages[pageId].classList.add('active');
+
+                navLinks.forEach(a => {
+                    a.classList.toggle('active', a.dataset.page === pageId);
+                });
+
+                bottomNav.forEach(a => {
+                    a.classList.toggle('active', a.dataset.page === pageId);
+                });
+
+                navLinksContainer.classList.remove('open');
+
+                const bottomLogin = document.getElementById('bottomLoginBtn');
+                if (bottomLogin) {
+                    if (currentUser) {
+                        bottomLogin.innerHTML =
+                            `<i class="fas fa-user"></i><span>${currentUser.displayName || 'Akaunti'}</span>`;
+                        bottomLogin.dataset.page = 'profile';
+                    } else {
+                        bottomLogin.innerHTML = `<i class="fas fa-user"></i><span>Ingia</span>`;
+                        bottomLogin.dataset.page = 'login';
+                    }
+                }
+
+                if (pageId === 'home') {
+                    loadPublicCommands();
+                    loadStats();
+                }
+                if (pageId === 'admin' && currentUser) {
+                    if (isAdminUnlocked) {
+                        adminLock.style.display = 'none';
+                        adminContent.classList.add('show');
+                        loadAdminCommands();
+                        loadStats();
+                    } else {
+                        adminLock.style.display = 'block';
+                        adminContent.classList.remove('show');
+                    }
+                }
+
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+
+            navLinks.forEach(a => {
+                a.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    showPage(a.dataset.page);
+                });
+            });
+
+            bottomNav.forEach(a => {
+                a.addEventListener('click', () => {
+                    showPage(a.dataset.page);
+                });
+            });
+
+            hamburger.addEventListener('click', () => {
+                navLinksContainer.classList.toggle('open');
+            });
+
+            document.querySelectorAll('.nav-auth a[data-page]').forEach(a => {
+                a.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    showPage(a.dataset.page);
+                });
+            });
+
+            switchToSignup.addEventListener('click', (e) => { e.preventDefault();
+                showPage('signup'); });
+            switchToLogin.addEventListener('click', (e) => { e.preventDefault();
+                showPage('login'); });
+
+            // ==============================================================
+            // AUTH
+            // ==============================================================
+            function handleUserLoggedIn(user) {
+                const blocked = getBlockedUsers();
+                if (blocked.includes(user.uid || user.email)) {
+                    showToast('Akaunti yako imefungwa. Wasiliana na Admin.', 'error');
+                    if (useFirebase && auth) auth.signOut();
+                    localStorage.removeItem('termux_currentUser');
+                    return;
+                }
+
+                currentUser = user;
+                document.body.classList.add('logged-in');
+                setCurrentUser(user);
+
+                loadPublicCommands();
+                loadStats();
+
+                const active = document.querySelector('.page.active');
+                if (!active || active.id === 'page-login' || active.id === 'page-signup') {
+                    showPage('home');
+                }
+
+                showToast('Karibu ' + (user.displayName || user.email || 'Mtumiaji') + '!', 'success');
+            }
+
+            function handleUserLoggedOut() {
+                currentUser = null;
+                document.body.classList.remove('logged-in');
+                setCurrentUser(null);
+
+                isAdminUnlocked = false;
+                adminLock.style.display = 'block';
+                adminContent.classList.remove('show');
+                adminPassInput.value = '';
+                adminPassError.textContent = '';
+
+                loginForm.reset();
+                signupForm.reset();
+                loginFeedback.textContent = '';
+                signupFeedback.textContent = '';
+                showPage('login');
+
+                if (useFirebase && auth) {
+                    auth.signOut();
+                }
+                localStorage.removeItem('termux_currentUser');
+            }
+
+            // Login
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = loginEmail.value.trim();
+                const pass = loginPassword.value;
+
+                if (!email || !pass) {
+                    loginFeedback.textContent = 'Tafadhali jaza barua pepe na nenosiri.';
+                    loginFeedback.className = 'form-feedback error';
+                    return;
+                }
+
+                loginFeedback.textContent = 'Inaingiza...';
+                loginFeedback.className = 'form-feedback';
+                loginBtn.disabled = true;
+
+                try {
+                    if (useFirebase && auth) {
+                        await auth.signInWithEmailAndPassword(email, pass);
+                        loginForm.reset();
+                        showToast('Karibu tena!', 'success');
+                    } else {
+                        const users = getUsers();
+                        const found = users.find(u => u.email === email && u.password === pass);
+                        if (!found) {
+                            loginFeedback.textContent = 'Barua pepe au nenosiri si sahihi.';
+                            loginFeedback.className = 'form-feedback error';
+                            return;
+                        }
+                        const user = { email: found.email, uid: found.uid, displayName: found.fullName || '' };
+                        localStorage.setItem('termux_currentUser', JSON.stringify(user));
+                        handleUserLoggedIn(user);
+                        loginForm.reset();
+                        showToast('Karibu tena!', 'success');
+                    }
+                } catch (err) {
+                    loginFeedback.textContent = err.message;
+                    loginFeedback.className = 'form-feedback error';
+                    showToast(err.message, 'error');
+                } finally {
+                    loginBtn.disabled = false;
+                }
+            });
+
+            // Signup
+            signupForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                signupFeedback.textContent = '';
+
+                const fullName = signupFullName.value.trim();
+                const username = signupUsername.value.trim();
+                const email = signupEmail.value.trim();
+                const pass = signupPassword.value;
+                const confirm = signupConfirm.value;
+
+                if (!fullName || !username || !email || !pass || !confirm) {
+                    signupFeedback.textContent = 'Tafadhali jaza sehemu zote.';
+                    signupFeedback.className = 'form-feedback error';
+                    return;
+                }
+
+                if (pass.length < 8) {
+                    signupFeedback.textContent = 'Nenosiri lazima iwe na herufi 8 au zaidi.';
+                    signupFeedback.className = 'form-feedback error';
+                    return;
+                }
+
+                if (pass !== confirm) {
+                    signupFeedback.textContent = 'Nenosiri na uthibitisho hazifanani.';
+                    signupFeedback.className = 'form-feedback error';
+                    return;
+                }
+
+                if (!termsCheck.checked) {
+                    signupFeedback.textContent = 'Lazima ukubali masharti na sera.';
+                    signupFeedback.className = 'form-feedback error';
+                    return;
+                }
+
+                const users = getUsers();
+                if (users.some(u => u.username === username)) {
+                    signupFeedback.textContent = 'Jina la mtumiaji tayari limetumika.';
+                    signupFeedback.className = 'form-feedback error';
+                    return;
+                }
+                if (users.some(u => u.email === email)) {
+                    signupFeedback.textContent = 'Barua pepe tayari imesajiliwa.';
+                    signupFeedback.className = 'form-feedback error';
+                    return;
+                }
+
+                signupFeedback.textContent = 'Inaunda akaunti...';
+                signupFeedback.className = 'form-feedback';
+                signupBtn.disabled = true;
+
+                try {
+                    if (useFirebase && auth) {
+                        const cred = await auth.createUserWithEmailAndPassword(email, pass);
+                        await cred.user.updateProfile({ displayName: fullName });
+                        if (db) {
+                            await db.collection('users').doc(cred.user.uid).set({
+                                fullName: fullName,
+                                username: username,
+                                email: email,
+                                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                            });
+                        }
+                        showToast('Akaunti imeundwa! Karibu.', 'success');
+                        signupForm.reset();
+                    } else {
+                        const newUser = {
+                            uid: 'user_' + Date.now(),
+                            fullName: fullName,
+                            username: username,
+                            email: email,
+                            password: pass,
+                            createdAt: Date.now()
+                        };
+                        users.push(newUser);
+                        saveUsers(users);
+                        const userObj = { email, uid: newUser.uid, displayName: fullName };
+                        localStorage.setItem('termux_currentUser', JSON.stringify(userObj));
+                        handleUserLoggedIn(userObj);
+                        signupForm.reset();
+                        showToast('Akaunti imeundwa! Karibu.', 'success');
+                    }
+                } catch (err) {
+                    signupFeedback.textContent = err.message;
+                    signupFeedback.className = 'form-feedback error';
+                    showToast(err.message, 'error');
+                } finally {
+                    signupBtn.disabled = false;
+                }
+            });
+
+            // Forgot Password
+            forgotLink.addEventListener('click', async () => {
+                const email = loginEmail.value.trim();
+                if (!email) {
+                    showToast('Tafadhali weka barua pepe yako.', 'warning');
+                    return;
+                }
+                if (!useFirebase || !auth) {
+                    showToast('Tuma barua pepe kupata nenosiri jipya (demo).', 'info');
+                    return;
+                }
+                try {
+                    await auth.sendPasswordResetEmail(email);
+                    showToast('Barua pepe ya kuweka upya nenosiri imetumwa.', 'success');
+                } catch (err) {
+                    showToast(err.message, 'error');
+                }
+            });
+
+            // Logout
+            logoutBtn.addEventListener('click', () => {
+                if (confirm('Una uhakika unataka kutoka?')) {
+                    handleUserLoggedOut();
+                    showToast('Umefanikiwa kutoka.', 'info');
+                }
+            });
+
+            // ==============================================================
+            // ADMIN UNLOCK
+            // ==============================================================
+            adminUnlockBtn.addEventListener('click', () => {
+                const pass = adminPassInput.value.trim();
+                adminPassError.textContent = '';
+                if (checkAdminPassword(pass)) {
+                    isAdminUnlocked = true;
+                    adminLock.style.display = 'none';
+                    adminContent.classList.add('show');
+                    showToast('Admin imefunguliwa!', 'success');
+                    loadAdminCommands();
+                    loadStats();
+                } else {
+                    adminPassError.textContent = '❌ Umekosea nenosiri. Jaribu tena.';
+                    adminPassInput.value = '';
+                    adminPassInput.focus();
+                }
+            });
+
+            adminPassInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') adminUnlockBtn.click();
+            });
+
+            // ==============================================================
+            // COMMANDS CRUD
+            // ==============================================================
+            function getTimestamp() { return Date.now(); }
+
+            function getRealDate() {
+                const now = new Date();
+                return now.toLocaleDateString('sw', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit',
+                    minute: '2-digit' });
+            }
+
+            commandForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+
+                if (!currentUser) {
+                    showToast('Tafadhali ingia kwanza.', 'warning');
+                    return;
+                }
+                if (!isAdminUnlocked) {
+                    showToast('Tafadhali fungua admin kwanza.', 'warning');
+                    return;
+                }
+
+                const command = cmdCommand.value.trim();
+                if (!command) {
+                    cmdFormFeedback.textContent = '❌ Tafadhali weka command.';
+                    cmdFormFeedback.className = 'form-feedback error';
+                    return;
+                }
+
+                const desc = cmdDesc.value.trim();
+                const category = cmdCategory.value;
+                const tags = cmdTags.value.trim().split(',').map(t => t.trim()).filter(t => t);
+                const examples = cmdExamples.value.trim().split('\n').filter(e => e.trim());
+                const endNote = cmdEndNote.value.trim();
+
+                cmdFormFeedback.textContent = 'Inasasisha...';
+                cmdFormFeedback.className = 'form-feedback';
+
+                try {
+                    const data = {
+                        command: command,
+                        description: desc || '',
+                        category: category,
+                        tags: tags,
+                        examples: examples,
+                        endNote: endNote || '',
+                        updatedAt: getTimestamp(),
+                        updatedBy: currentUser.displayName || currentUser.email || 'Admin',
+                        realDate: getRealDate()
+                    };
+
+                    let list = getCommands();
+
+                    if (editingDocId) {
+                        const idx = list.findIndex(c => c.id === editingDocId);
+                        if (idx !== -1) {
+                            list[idx] = { ...list[idx], ...data };
+                            saveCommands(list);
+                        }
+                        showToast('Command imesasishwa!', 'success');
+                        cmdFormFeedback.textContent = '✅ Imesasishwa!';
+                        cmdFormFeedback.className = 'form-feedback success';
+                    } else {
+                        data.id = 'cmd_' + Date.now();
+                        data.createdAt = getTimestamp();
+                        data.createdBy = currentUser.displayName || currentUser.email || 'Admin';
+                        list.unshift(data);
+                        saveCommands(list);
+                        showToast('✅ Command imeongezwa!', 'success');
+                        cmdFormFeedback.textContent = '✅ Imehifadhiwa!';
+                        cmdFormFeedback.className = 'form-feedback success';
+                    }
+
+                    resetCommandForm();
+                    loadAdminCommands();
+                    loadPublicCommands();
+                    loadStats();
+
+                } catch (err) {
+                    cmdFormFeedback.textContent = '❌ ' + err.message;
+                    cmdFormFeedback.className = 'form-feedback error';
+                    showToast(err.message, 'error');
+                }
+            });
+
+            function resetCommandForm() {
+                cmdCommand.value = '';
+                cmdDesc.value = '';
+                cmdCategory.value = 'OSINT';
+                cmdTags.value = '';
+                cmdExamples.value = '';
+                cmdEndNote.value = '';
+                editingDocId = null;
+                cmdBtnText.textContent = 'Hifadhi';
+                cmdSubmitBtn.querySelector('i').className = 'fas fa-save';
+                cmdFormFeedback.textContent = '';
+                cmdFormFeedback.className = 'form-feedback';
+            }
+
+            // ==============================================================
+            // ESCAPE HTML
+            // ==============================================================
+            function escapeHtml(text) {
+                if (!text) return '';
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            // ==============================================================
+            // LOAD PUBLIC COMMANDS (kama screenshot)
+            // ==============================================================
+            function loadPublicCommands() {
+                try {
+                    const data = getCommands().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+                    const searchTerm = searchInput.value.toLowerCase().trim();
+
+                    let filtered = data;
+                    if (searchTerm) {
+                        filtered = data.filter(c =>
+                            c.command.toLowerCase().includes(searchTerm) ||
+                            (c.description || '').toLowerCase().includes(searchTerm) ||
+                            (c.tags || []).some(t => t.toLowerCase().includes(searchTerm)) ||
+                            c.category.toLowerCase().includes(searchTerm)
+                        );
+                    }
+
+                    publicList.innerHTML = '';
+                    if (filtered.length === 0) {
+                        publicList.innerHTML =
+                            `<div class="empty-state"><i class="fas fa-inbox"></i><p>${searchTerm ? 'Hakuna command inayofanana na "' + searchTerm + '"' : 'Hakuna commands bado.'}</p></div>`;
+                        return;
+                    }
+
+                    filtered.forEach(item => {
+                        const card = document.createElement('div');
+                        card.className = 'command-card';
+                        const date = item.realDate || (item.createdAt ? new Date(item.createdAt)
+                            .toLocaleDateString('sw') : 'sasa hivi');
+
+                        const tagsHtml = (item.tags || []).map(t =>
+                            `<span class="tag">#${t}</span>`
+                        ).join('');
+
+                        // Examples
+                        let examplesHtml = '';
+                        if (item.examples && item.examples.length > 0) {
+                            examplesHtml = `<div class="command-examples">`;
+                            item.examples.forEach(ex => {
+                                // Try to split description if exists
+                                let cmdText = ex;
+                                let exDesc = '';
+                                const parts = ex.split(' - ');
+                                if (parts.length > 1) {
+                                    cmdText = parts[0];
+                                    exDesc = parts.slice(1).join(' - ');
+                                }
+                                examplesHtml += `
+                                    <div class="example-item">
+                                        <span><i class="fas fa-terminal" style="color:var(--green);font-size:0.7rem;"></i> ${escapeHtml(cmdText)}</span>
+                                        <div style="display:flex;align-items:center;gap:8px;">
+                                            <span class="ex-desc">${escapeHtml(exDesc)}</span>
+                                            <button class="copy-mini" data-command="${escapeHtml(cmdText)}"><i class="fas fa-copy"></i></button>
+                                        </div>
+                                    </div>
+                                `;
+                            });
+                            examplesHtml += `</div>`;
+                        }
+
+                        // End Note
+                        let endNoteHtml = '';
+                        if (item.endNote) {
+                            endNoteHtml = `
+                                <div class="end-note">
+                                    <i class="fas fa-info-circle"></i> ${escapeHtml(item.endNote)}
+                                </div>
+                            `;
+                        }
+
+                        card.innerHTML = `
+                            <div class="command-header">
+                                <span class="badge-category"><i class="fas fa-tag"></i> ${escapeHtml(item.category || 'Other')}</span>
+                                <button class="copy-btn" data-command="${escapeHtml(item.command)}">
+                                    <i class="fas fa-copy"></i> Nakili
+                                </button>
+                            </div>
+                            <div class="command-main">
+                                <i class="fas fa-terminal cmd-icon"></i> ${escapeHtml(item.command)}
+                            </div>
+                            ${item.description ? `
+                                <div class="command-description">
+                                    <div class="label">📝 Maelezo</div>
+                                    <div class="text">${escapeHtml(item.description)}</div>
+                                </div>
+                            ` : ''}
+                            ${examplesHtml}
+                            ${endNoteHtml}
+                            <div class="tags">${tagsHtml}</div>
+                            <div class="meta">
+                                <span><i class="far fa-calendar-alt"></i> ${escapeHtml(date)}</span>
+                                <span><i class="far fa-user"></i> ${escapeHtml(item.createdBy || 'Admin')}</span>
+                            </div>
+                        `;
+                        publicList.appendChild(card);
+
+                        // Copy main command
+                        card.querySelector('.copy-btn').addEventListener('click', function() {
+                            const cmd = this.dataset.command;
+                            navigator.clipboard.writeText(cmd).then(() => showToast('Command imenakiliwa!',
+                                'success')).catch(() => {
+                                const ta = document.createElement('textarea');
+                                ta.value = cmd;
+                                document.body.appendChild(ta);
+                                ta.select();
+                                document.execCommand('copy');
+                                ta.remove();
+                                showToast('Command imenakiliwa!', 'success');
+                            });
+                        });
+
+                        // Copy mini examples
+                        card.querySelectorAll('.copy-mini').forEach(btn => {
+                            btn.addEventListener('click', function(e) {
+                                e.stopPropagation();
+                                const cmd = this.dataset.command;
+                                navigator.clipboard.writeText(cmd).then(() => showToast(
+                                    'Command imenakiliwa!', 'success')).catch(() => {
+                                    const ta = document.createElement('textarea');
+                                    ta.value = cmd;
+                                    document.body.appendChild(ta);
+                                    ta.select();
+                                    document.execCommand('copy');
+                                    ta.remove();
+                                    showToast('Command imenakiliwa!', 'success');
+                                });
+                            });
+                        });
+                    });
+                } catch (err) {
+                    console.error('Load public error:', err);
+                    publicList.innerHTML = `<div class="empty-state"><p>❌ ${err.message}</p></div>`;
+                }
+            }
+
+            // ==============================================================
+            // SEARCH
+            // ==============================================================
+            searchInput.addEventListener('input', loadPublicCommands);
+
+            // ==============================================================
+            // LOAD ADMIN COMMANDS
+            // ==============================================================
+            function loadAdminCommands() {
+                if (!currentUser || !isAdminUnlocked) return;
+                try {
+                    const data = getCommands().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+                    adminList.innerHTML = '';
+                    if (data.length === 0) {
+                        adminList.innerHTML =
+                            `<p style="color:var(--text-muted);">Hakuna commands. Anza kuongeza!</p>`;
+                        return;
+                    }
+                    data.forEach(item => {
+                        const div = document.createElement('div');
+                        div.className = 'admin-item';
+                        const date = item.realDate || (item.createdAt ? new Date(item.createdAt)
+                            .toLocaleDateString('sw') : '');
+                        div.innerHTML = `
+                            <div class="info">
+                                <div class="command">${escapeHtml(item.command)}</div>
+                                <div class="desc">${escapeHtml(item.description || 'Hakuna maelezo')}</div>
+                                <div style="font-size:0.7rem;color:var(--text-muted);">
+                                    <span class="badge-category" style="font-size:0.6rem;">${escapeHtml(item.category || 'Other')}</span>
+                                    ${escapeHtml(date)}
+                                </div>
+                            </div>
+                            <div class="actions">
+                                <button class="btn-edit" data-id="${item.id}"><i class="fas fa-edit"></i> Hariri</button>
+                                <button class="btn-danger" data-id="${item.id}"><i class="fas fa-trash"></i> Futa</button>
+                            </div>
+                        `;
+                        adminList.appendChild(div);
+
+                        div.querySelector('.btn-edit').addEventListener('click', () => {
+                            editingDocId = item.id;
+                            cmdCommand.value = item.command || '';
+                            cmdDesc.value = item.description || '';
+                            cmdCategory.value = item.category || 'OSINT';
+                            cmdTags.value = (item.tags || []).join(', ');
+                            cmdExamples.value = (item.examples || []).join('\n');
+                            cmdEndNote.value = item.endNote || '';
+                            cmdBtnText.textContent = 'Sasisha';
+                            cmdSubmitBtn.querySelector('i').className = 'fas fa-edit';
+                            cmdFormFeedback.textContent = '🔧 Unahariri: ' + (item.command || '');
+                            cmdFormFeedback.className = 'form-feedback';
+                            cmdCommand.focus();
+                        });
+
+                        div.querySelector('.btn-danger').addEventListener('click', () => {
+                            if (!confirm('Futa command hii?')) return;
+                            try {
+                                let list = getCommands();
+                                list = list.filter(c => c.id !== item.id);
+                                saveCommands(list);
+                                showToast('Command imefutwa!', 'success');
+                                loadAdminCommands();
+                                loadPublicCommands();
+                                loadStats();
+                            } catch (err) {
+                                showToast(err.message, 'error');
+                            }
+                        });
+                    });
+                } catch (err) {
+                    console.error('Load admin error:', err);
+                    adminList.innerHTML = `<p style="color:#ef4444;">❌ ${err.message}</p>`;
+                }
+            }
+
+            // ==============================================================
+            // STATS & ONLINE COUNT
+            // ==============================================================
+            function loadStats() {
+                try {
+                    const users = getUsers();
+                    const commands = getCommands();
+                    homeStatUsers.textContent = users.length;
+                    homeStatCommands.textContent = commands.length;
+                    adminStatUsers.textContent = users.length;
+                    adminStatCommands.textContent = commands.length;
+                } catch (err) { console.warn('Stats error:', err); }
+            }
+
+            function updateOnlineCount() {
+                const count = Math.floor(Math.random() * 20) + 1;
+                onlineCount.textContent = count;
+                homeStatOnline.textContent = count;
+            }
+
+            setInterval(updateOnlineCount, 15000);
+
+            // ==============================================================
+            // INIT
+            // ==============================================================
+            if (useFirebase && auth) {
+                auth.onAuthStateChanged((user) => {
+                    if (user) {
+                        const userObj = {
+                            uid: user.uid,
+                            email: user.email,
+                            displayName: user.displayName,
+                            photoURL: user.photoURL
+                        };
+                        handleUserLoggedIn(userObj);
+                    } else {
+                        const stored = localStorage.getItem('termux_currentUser');
+                        if (stored) {
+                            try {
+                                const u = JSON.parse(stored);
+                                handleUserLoggedIn(u);
+                            } catch { handleUserLoggedOut(); }
+                        } else {
+                            handleUserLoggedOut();
+                        }
+                    }
+                });
+            } else {
+                const stored = localStorage.getItem('termux_currentUser');
+                if (stored) {
+                    try {
+                        const u = JSON.parse(stored);
+                        handleUserLoggedIn(u);
+                    } catch { handleUserLoggedOut(); }
+                } else {
+                    handleUserLoggedOut();
+                }
+            }
+
+            showPage('home');
+            loadPublicCommands();
+            loadStats();
+            updateOnlineCount();
+
+            console.log('✅ Termux Command Manager - Kama screenshot!');
+            console.log('🔑 Nenosiri la Admin: 5050');
+            console.log('📝 Unaweza kuongeza commands na maelezo yote kamili kama kwenye picha.');
+
+        })();
+    </script>
+
+</body>
+  </html>
